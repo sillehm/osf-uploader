@@ -24,8 +24,11 @@ app.post('/upload', async (req, res) => {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error("OSF response status:", response.status);
+      console.error("OSF response text:", errorText);
       throw new Error(errorText);
     }
+
 
     res.status(200).send("Upload successful!");
   } catch (err) {
