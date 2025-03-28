@@ -12,8 +12,6 @@ const OSF_PROJECT_ID = process.env.OSF_PROJECT_ID;
 app.post('/upload', async (req, res) => {
   const { filename, content } = req.body;
 
-  console.log("Received upload request:", filename);
-
   try {
     const response = await fetch(`https://files.osf.io/v1/resources/${OSF_PROJECT_ID}/providers/osfstorage/?name=${filename}`, {
       method: 'PUT',
@@ -29,10 +27,9 @@ app.post('/upload', async (req, res) => {
       throw new Error(errorText);
     }
 
-    console.log("✅ Upload to OSF successful!");
-    res.status(200).send("Success");
+    res.status(200).send("Upload successful!");
   } catch (err) {
-    console.error("❌ Upload error:", err);
+    console.error("Upload failed:", err);
     res.status(500).send("Upload failed: " + err.message);
   }
 });
