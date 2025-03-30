@@ -9,6 +9,10 @@ app.use(express.json());
 const OSF_TOKEN = process.env.OSF_TOKEN;
 const OSF_PROJECT_ID = process.env.OSF_PROJECT_ID;
 
+app.get("/ping", (req, res) => {
+  res.status(200).send("Server awake");
+});
+
 app.post('/upload', async (req, res) => {
   const { filename, content } = req.body;
 
