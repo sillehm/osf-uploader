@@ -13,9 +13,9 @@ const OSF_PROJECT_ID = process.env.OSF_PROJECT_ID;
 
 const CONDITIONS = ["original", "labels", 'linear'];
 const CONDITION_IMAGES = {
-  original: "https://github.com/sillehm/Climate-label-judgement/tree/main/scales/scale_original.png",
+  original: "https://github.com/sillehm/Climate-label-judgement/blob/main/scales/scale_original.png",
   labels: null,
-  linear: "https://github.com/sillehm/Climate-label-judgement/tree/main/scales/scale_linear.png"
+  linear: "https://github.com/sillehm/Climate-label-judgement/blob/main/scales/scale_linear.png"
 };
 
 const ASSIGNMENT_FILE = path.join("scale_counts.csv"); // stored locally per service
