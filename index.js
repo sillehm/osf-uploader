@@ -11,68 +11,58 @@ app.use(express.json());
 const OSF_TOKEN = process.env.OSF_TOKEN;
 const OSF_PROJECT_ID = process.env.OSF_PROJECT_ID;
 
-const CONDITIONS = ["original", "labels", "linear"];
+const CONDITIONS = ["original", "labels", 'linear'];
 const CONDITION_IMAGES = {
   original: "https://raw.githubusercontent.com/sillehm/Climate-label-judgement/main/scales/scale_original.png",
   labels: null,
   linear: "https://raw.githubusercontent.com/sillehm/Climate-label-judgement/main/scales/scale_linear.png"
 };
 
-const ASSIGNMENT_FILE = path.join("scale_counts.csv");
+const ASSIGNMENT_FILE = path.join("scale_counts.csv"); // stored locally per service
 
-// Create file if not present
-function initCountsFile() {
-  if (!fs.existsSync(ASSIGNMENT_FILE)) {
-    const initial = "condition,count\noriginal,9\nlabels,7\nlinear,5";
-    fs.writeFileSync(ASSIGNMENT_FILE, initial);
-  }
-}
 
-// Assign balanced condition
-app.get('/assign-condition', (req, res) => {
-  try {
-    initCountsFile();
-
-    const lines = fs.readFileSync(ASSIGNMENT_FILE, 'utf-8').trim().split('\n').slice(1);
-    const counts = {};
-    lines.forEach(line => {
-      const [cond, count] = line.split(',');
-      counts[cond] = parseInt(count);
-    });
-
-    // Pick condition with lowest count
-    const chosen = Object.entries(counts).sort((a, b) => a[1] - b[1])[0][0];
-    counts[chosen] += 1;
-
-    // Save updated counts
-    const updated = "condition,count\n" + CONDITIONS.map(cond => `${cond},${counts[cond]}`).join('\n');
-    fs.writeFileSync(ASSIGNMENT_FILE, updated);
-
-    // Respond
-    res.json({
-      condition: chosen,
-      image: CONDITION_IMAGES[chosen]
-    });
-  } catch (err) {
-    console.error("Assignment failed:", err);
-    res.status(500).send("Condition assignment failed");
-  }
-});
-
-// OSF ping
-app.get('/ping', (req, res) => {
+app.get("/ping", (req, res) => {
   res.status(200).send("Server awake");
 });
 
-// Upload data to OSF
+app.get('/assign-condition', (req, res) => {
+  // If file doesn't exist, create it
+  if (!fs.existsSync(ASSIGNMENT_FILE)) {
+    fs.writeFileSync(ASSIGNMENT_FILE, "condition,count\noriginal,9\nlabels,7\nlinear,5");
+  }
+
+  // Read and parse counts
+  const lines = fs.readFileSync(ASSIGNMENT_FILE, "utf-8").trim().split('\n').slice(1);
+  const counts = {};
+  lines.forEach(line => {
+    const [cond, count] = line.split(',');
+    counts[cond] = parseInt(count);
+  });
+
+  // Assign least-used condition
+  const chosen = Object.entries(counts).sort((a, b) => a[1] - b[1])[0][0];
+  counts[chosen] += 1;
+
+  // Write updated counts back
+  const updated = "condition,count\n" + CONDITIONS.map(cond => ${cond},${counts[cond]}).join('\n');
+  fs.writeFileSync(ASSIGNMENT_FILE, updated);
+
+  // Send assignment
+  res.json({
+    condition: chosen,
+    image: CONDITION_IMAGES[chosen]
+  });
+});
+
+
 app.post('/upload', async (req, res) => {
   const { filename, content } = req.body;
 
   try {
-    const response = await fetch(`https://files.osf.io/v1/resources/${OSF_PROJECT_ID}/providers/osfstorage/?name=${filename}`, {
+    const response = await fetch(https://files.osf.io/v1/resources/${OSF_PROJECT_ID}/providers/osfstorage/?name=${filename}, {
       method: 'PUT',
       headers: {
-        Authorization: `Bearer ${OSF_TOKEN}`,
+        Authorization: Bearer ${OSF_TOKEN},
         'Content-Type': 'text/csv'
       },
       body: content
@@ -80,18 +70,20 @@ app.post('/upload', async (req, res) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("OSF upload error:", errorText);
+      console.error("OSF response status:", response.status);
+      console.error("OSF response text:", errorText);
       throw new Error(errorText);
     }
+
 
     res.status(200).send("Upload successful!");
   } catch (err) {
     console.error("Upload failed:", err);
-    res.status(500).send("Upload failed");
+    res.status(500).send("Upload failed: " + err.message);
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(🚀 Server is running on port ${PORT});
 });
