@@ -18,81 +18,58 @@ const CONDITION_IMAGES = {
   linear: "https://raw.githubusercontent.com/sillehm/Climate-label-judgement/main/scales/scale_linear.png"
 };
 
-const SCALE_FILE = "scale_counts.csv";
-const osfBaseUrl = `https://files.osf.io/v1/resources/${OSF_PROJECT_ID}/providers/osfstorage`;
+const ASSIGNMENT_FILE = path.join("scale_counts.csv");
 
-app.get("/ping", (req, res) => {
-  res.status(200).send("Server awake");
-});
+// Create file if not present
+function initCountsFile() {
+  if (!fs.existsSync(ASSIGNMENT_FILE)) {
+    const initial = "condition,count\noriginal,0\nlabels,0\nlinear,0";
+    fs.writeFileSync(ASSIGNMENT_FILE, initial);
+  }
+}
 
-app.get('/assign-condition', async (req, res) => {
+// Assign balanced condition
+app.get('/assign-condition', (req, res) => {
   try {
-    // 1. Get file metadata from OSF
-    const metaResp = await fetch(osfBaseUrl, {
-      headers: { Authorization: `Bearer ${OSF_TOKEN}` }
-    });
-    const metaJson = await metaResp.json();
+    initCountsFile();
 
-    if (!metaJson.data) {
-      throw new Error("OSF metadata response missing 'data'");
-    }
-
-    const fileMeta = metaJson.data.find(f => f.attributes?.name === SCALE_FILE);
-    if (!fileMeta) {
-      throw new Error(`${SCALE_FILE} not found in OSF project.`);
-    }
-
-    // 2. Download current counts from the file
-    const downloadUrl = fileMeta.links.download;
-    const fileResp = await fetch(downloadUrl);
-    const csvText = await fileResp.text();
-
-    const lines = csvText.trim().split('\n').slice(1);
+    const lines = fs.readFileSync(ASSIGNMENT_FILE, 'utf-8').trim().split('\n').slice(1);
     const counts = {};
     lines.forEach(line => {
       const [cond, count] = line.split(',');
       counts[cond] = parseInt(count);
     });
 
-    // 3. Assign least-used condition
+    // Pick condition with lowest count
     const chosen = Object.entries(counts).sort((a, b) => a[1] - b[1])[0][0];
     counts[chosen] += 1;
 
-    // 4. Rebuild updated CSV
-    const updatedCsv = "condition,count\n" + CONDITIONS.map(cond => `${cond},${counts[cond]}`).join('\n');
+    // Save updated counts
+    const updated = "condition,count\n" + CONDITIONS.map(cond => `${cond},${counts[cond]}`).join('\n');
+    fs.writeFileSync(ASSIGNMENT_FILE, updated);
 
-    // 5. Upload updated file back to OSF
-    const uploadResp = await fetch(`${osfBaseUrl}/?name=${SCALE_FILE}`, {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${OSF_TOKEN}`,
-        'Content-Type': 'text/csv'
-      },
-      body: updatedCsv
-    });
-
-    if (!uploadResp.ok) {
-      const errorText = await uploadResp.text();
-      throw new Error(`Upload failed: ${uploadResp.status} - ${errorText}`);
-    }
-
-    // 6. Send response
+    // Respond
     res.json({
       condition: chosen,
       image: CONDITION_IMAGES[chosen]
     });
-
   } catch (err) {
-    console.error("Condition assignment failed:", err);
-    res.status(500).send("Condition assignment failed: " + err.message);
+    console.error("Assignment failed:", err);
+    res.status(500).send("Condition assignment failed");
   }
 });
 
+// OSF ping
+app.get('/ping', (req, res) => {
+  res.status(200).send("Server awake");
+});
+
+// Upload data to OSF
 app.post('/upload', async (req, res) => {
   const { filename, content } = req.body;
 
   try {
-    const response = await fetch(`${osfBaseUrl}/?name=${filename}`, {
+    const response = await fetch(`https://files.osf.io/v1/resources/${OSF_PROJECT_ID}/providers/osfstorage/?name=${filename}`, {
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${OSF_TOKEN}`,
@@ -103,15 +80,14 @@ app.post('/upload', async (req, res) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("OSF response status:", response.status);
-      console.error("OSF response text:", errorText);
+      console.error("OSF upload error:", errorText);
       throw new Error(errorText);
     }
 
     res.status(200).send("Upload successful!");
   } catch (err) {
     console.error("Upload failed:", err);
-    res.status(500).send("Upload failed: " + err.message);
+    res.status(500).send("Upload failed");
   }
 });
 
