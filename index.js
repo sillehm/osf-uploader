@@ -18,42 +18,67 @@ const CONDITION_IMAGES = {
   linear: "https://raw.githubusercontent.com/sillehm/Climate-label-judgement/main/scales/scale_linear.png"
 };
 
-const ASSIGNMENT_FILE = path.join("scale_counts.csv"); // stored locally per service
+app.get('/assign-condition', async (req, res) => {
+  const SCALE_FILE = 'scale_counts.csv';
+  const osfBaseUrl = `https://files.osf.io/v1/resources/${OSF_PROJECT_ID}/providers/osfstorage`;
+
+  try {
+    // 1. Download current counts from OSF
+    const downloadResp = await fetch(`${osfBaseUrl}/?path=${SCALE_FILE}`, {
+      headers: { Authorization: `Bearer ${OSF_TOKEN}` }
+    });
+
+    if (!downloadResp.ok) {
+      throw new Error(`Failed to fetch scale file from OSF: ${downloadResp.status}`);
+    }
+
+    const csvText = await downloadResp.text();
+    const lines = csvText.trim().split('\n').slice(1);
+
+    const counts = {};
+    lines.forEach(line => {
+      const [cond, count] = line.split(',');
+      counts[cond] = parseInt(count);
+    });
+
+    // 2. Assign least-used condition
+    const chosen = Object.entries(counts).sort((a, b) => a[1] - b[1])[0][0];
+    counts[chosen] += 1;
+
+    // 3. Rebuild updated CSV
+    const updatedCsv = "condition,count\n" + CONDITIONS.map(cond => `${cond},${counts[cond]}`).join('\n');
+
+    // 4. Upload updated file back to OSF
+    const uploadResp = await fetch(`${osfBaseUrl}/?name=${SCALE_FILE}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${OSF_TOKEN}`,
+        'Content-Type': 'text/csv'
+      },
+      body: updatedCsv
+    });
+
+    if (!uploadResp.ok) {
+      const errorText = await uploadResp.text();
+      throw new Error(`Upload failed: ${uploadResp.status} - ${errorText}`);
+    }
+
+    // 5. Return condition + image path
+    res.json({
+      condition: chosen,
+      image: CONDITION_IMAGES[chosen]
+    });
+
+  } catch (err) {
+    console.error("Condition assignment failed:", err);
+    res.status(500).send("Condition assignment failed: " + err.message);
+  }
+});
 
 
 app.get("/ping", (req, res) => {
   res.status(200).send("Server awake");
 });
-
-app.get('/assign-condition', (req, res) => {
-  // If file doesn't exist, create it
-  if (!fs.existsSync(ASSIGNMENT_FILE)) {
-    fs.writeFileSync(ASSIGNMENT_FILE, "condition,count\noriginal,1\nlabels,5\nlinear,5");
-  }
-
-  // Read and parse counts
-  const lines = fs.readFileSync(ASSIGNMENT_FILE, "utf-8").trim().split('\n').slice(1);
-  const counts = {};
-  lines.forEach(line => {
-    const [cond, count] = line.split(',');
-    counts[cond] = parseInt(count);
-  });
-
-  // Assign least-used condition
-  const chosen = Object.entries(counts).sort((a, b) => a[1] - b[1])[0][0];
-  counts[chosen] += 1;
-
-  // Write updated counts back
-  const updated = "condition,count\n" + CONDITIONS.map(cond => `${cond},${counts[cond]}`).join('\n');
-  fs.writeFileSync(ASSIGNMENT_FILE, updated);
-
-  // Send assignment
-  res.json({
-    condition: chosen,
-    image: CONDITION_IMAGES[chosen]
-  });
-});
-
 
 app.post('/upload', async (req, res) => {
   const { filename, content } = req.body;
