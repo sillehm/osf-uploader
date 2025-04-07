@@ -23,32 +23,34 @@ app.get('/assign-condition', async (req, res) => {
   const osfBaseUrl = `https://files.osf.io/v1/resources/${OSF_PROJECT_ID}/providers/osfstorage`;
 
   try {
-    // 1. Download current counts from OSF
-    const downloadResp = await fetch(`${osfBaseUrl}/?path=${SCALE_FILE}`, {
-      headers: { Authorization: `Bearer ${OSF_TOKEN}` }
-    });
+    // 1. Get metadata to find the file ID or download link
+    const metaResp = await fetch(`${osfBaseUrl}/?token=${OSF_TOKEN}`);
+    const metaJson = await metaResp.json();
 
-    if (!downloadResp.ok) {
-      throw new Error(`Failed to fetch scale file from OSF: ${downloadResp.status}`);
-    }
+    const fileMeta = metaJson.data.find(f => f.attributes && f.attributes.name === SCALE_FILE);
+    if (!fileMeta) throw new Error("scale_counts.csv not found in OSF project.");
 
+    const downloadUrl = fileMeta.links.download;
+
+    // 2. Fetch the actual CSV content
+    const downloadResp = await fetch(downloadUrl);
     const csvText = await downloadResp.text();
-    const lines = csvText.trim().split('\n').slice(1);
 
+    const lines = csvText.trim().split('\n').slice(1);
     const counts = {};
     lines.forEach(line => {
       const [cond, count] = line.split(',');
       counts[cond] = parseInt(count);
     });
 
-    // 2. Assign least-used condition
+    // 3. Assign least-used condition
     const chosen = Object.entries(counts).sort((a, b) => a[1] - b[1])[0][0];
     counts[chosen] += 1;
 
-    // 3. Rebuild updated CSV
+    // 4. Rebuild updated CSV
     const updatedCsv = "condition,count\n" + CONDITIONS.map(cond => `${cond},${counts[cond]}`).join('\n');
 
-    // 4. Upload updated file back to OSF
+    // 5. Upload updated file back
     const uploadResp = await fetch(`${osfBaseUrl}/?name=${SCALE_FILE}`, {
       method: 'PUT',
       headers: {
@@ -63,7 +65,7 @@ app.get('/assign-condition', async (req, res) => {
       throw new Error(`Upload failed: ${uploadResp.status} - ${errorText}`);
     }
 
-    // 5. Return condition + image path
+    // 6. Return to frontend
     res.json({
       condition: chosen,
       image: CONDITION_IMAGES[chosen]
@@ -74,6 +76,7 @@ app.get('/assign-condition', async (req, res) => {
     res.status(500).send("Condition assignment failed: " + err.message);
   }
 });
+
 
 
 app.get("/ping", (req, res) => {
