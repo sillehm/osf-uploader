@@ -23,7 +23,7 @@ const ASSIGNMENT_FILE = path.join("scale_counts.csv");
 // Create file if not present
 function initCountsFile() {
   if (!fs.existsSync(ASSIGNMENT_FILE)) {
-    const initial = "condition,count\noriginal,0\nlabels,2\nlinear,5";
+    const initial = "condition,count\noriginal,1\nlabels,0\nlinear,8";
     fs.writeFileSync(ASSIGNMENT_FILE, initial);
   }
 }
